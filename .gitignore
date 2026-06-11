@@ -1,0 +1,38 @@
+# ─── Node.js ───────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-error.log
+
+# ─── Test coverage ─────────────────────────
+coverage/
+
+# ─── Environment / Secrets ─────────────────
+.env
+.env.local
+.env.production
+
+# ─── AWS credentials (never commit these) ──
+*.pem
+*.csv
+*.log
+.aws/
+
+# ─── OS files ──────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ─── VS Code ───────────────────────────────
+.vscode/
+
+# ─── Logs ──────────────────────────────────
+*.log
+logs/
+
+# ─── Docker ────────────────────────────────
+.dockerignore
+
+ansible/
+k8s/
+jenkinsfile
+package-lock.json
+package.json
