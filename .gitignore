@@ -31,8 +31,5 @@ logs/
 # ─── Docker ────────────────────────────────
 .dockerignore
 
-ansible/
-k8s/
-jenkinsfile
+
 package-lock.json
-package.json

@@ -1,0 +1,89 @@
+---
+- name: Configure TaskFlow application servers
+  hosts: role_webserver
+  become: true
+  gather_facts: true
+  vars:
+    node_version: "18"
+    app_user: taskflow
+    app_dir: /opt/taskflow
+    app_port: 3000
+
+  pre_tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+  tasks:
+    - name: Install required packages
+      apt:
+        name:
+          - curl
+          - wget
+          - git
+          - unzip
+          - python3-pip
+        state: present
+
+    - name: Install Node.js {{ node_version }}
+      shell: |
+        curl -fsSL https://deb.nodesource.com/setup_{{ node_version }}.x | bash -
+        apt-get install -y nodejs
+      args:
+        creates: /usr/bin/node
+
+    - name: Create app user
+      user:
+        name: "{{ app_user }}"
+        shell: /bin/bash
+        system: yes
+        create_home: yes
+
+    - name: Create app directory
+      file:
+        path: "{{ app_dir }}"
+        state: directory
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: '0755'
+
+    - name: Deploy app environment config
+      template:
+        src: ../roles/nodejs/templates/app.env.j2
+        dest: "{{ app_dir }}/.env"
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: '0600'
+
+    - name: Copy systemd service file
+      template:
+        src: ../roles/nodejs/templates/taskflow.service.j2
+        dest: /etc/systemd/system/taskflow.service
+        mode: '0644'
+
+    - name: Reload systemd daemon
+      systemd:
+        daemon_reload: yes
+
+    - name: Enable and start TaskFlow service
+      systemd:
+        name: taskflow
+        state: started
+        enabled: yes
+
+    - name: Wait for app to be healthy
+      uri:
+        url: "http://localhost:{{ app_port }}/health"
+        method: GET
+        status_code: 200
+      register: result
+      until: result.status == 200
+      retries: 10
+      delay: 5
+
+  handlers:
+    - name: restart taskflow
+      systemd:
+        name: taskflow
+        state: restarted

@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: Service
+metadata:
+name: taskflow-service
+namespace: taskflow
+labels:
+app: taskflow
+spec:
+type: LoadBalancer
+selector:
+app: taskflow
+ports:
+  -name: http
+    port: 80
+      targetPort: 3000
+      protocol: TCP
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: taskflow-hpa
+  namespace: taskflow
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: taskflow
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70

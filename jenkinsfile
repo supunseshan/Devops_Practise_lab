@@ -1,0 +1,145 @@
+pipeline {
+    agent any
+
+    environment {
+        AWS_REGION      = 'us-east-1'
+        AWS_ACCOUNT_ID  = credentials('aws-account-id')
+        ECR_REPO        = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/taskflow"
+        IMAGE_TAG       = "${BUILD_NUMBER}"
+        EKS_CLUSTER     = 'taskflow-cluster'
+        K8S_NAMESPACE   = 'taskflow'
+    }
+
+    options {
+        timeout(time: 30, unit: 'MINUTES')
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                echo "Checking out branch: ${env.BRANCH_NAME}"
+                checkout scm
+            }
+        }
+
+        stage('Install & Test') {
+            steps {
+                sh 'node --version && npm --version'
+                sh 'npm ci'
+                sh 'npm test -- --coverage'
+            }
+            post {
+                always {
+                    junit allowEmptyResults: true, testResults: 'coverage/junit.xml'
+                }
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                sh """
+                    docker build \
+                        --target runner \
+                        -t taskflow:${IMAGE_TAG} \
+                        -t taskflow:latest \
+                        .
+                """
+            }
+        }
+
+        stage('Push to ECR') {
+            steps {
+                sh """
+                    aws ecr get-login-password \
+                        --region ${AWS_REGION} | \
+                    docker login \
+                        --username AWS \
+                        --password-stdin ${ECR_REPO}
+                """
+                sh """
+                    docker tag taskflow:${IMAGE_TAG} ${ECR_REPO}:${IMAGE_TAG}
+                    docker tag taskflow:${IMAGE_TAG} ${ECR_REPO}:latest
+                    docker push ${ECR_REPO}:${IMAGE_TAG}
+                    docker push ${ECR_REPO}:latest
+                """
+            }
+        }
+
+        stage('Ansible Configure') {
+            when {
+                branch 'main'
+            }
+            steps {
+                sh """
+                    ansible-playbook \
+                        -i ansible/inventory/aws_ec2.yml \
+                        ansible/playbooks/configure.yml \
+                        --extra-vars "app_version=${IMAGE_TAG}" \
+                        -v
+                """
+            }
+        }
+
+        stage('Deploy to EKS') {
+            when {
+                branch 'main'
+            }
+            steps {
+                sh """
+                    aws eks update-kubeconfig \
+                        --name ${EKS_CLUSTER} \
+                        --region ${AWS_REGION}
+                """
+                sh """
+                    kubectl apply -f k8s/namespace.yaml
+                    kubectl apply -f k8s/configmap.yaml
+                    kubectl set image deployment/taskflow \
+                        taskflow=${ECR_REPO}:${IMAGE_TAG} \
+                        -n ${K8S_NAMESPACE}
+                    kubectl rollout status deployment/taskflow \
+                        -n ${K8S_NAMESPACE} \
+                        --timeout=120s
+                """
+            }
+        }
+
+        stage('Smoke Test') {
+            when {
+                branch 'main'
+            }
+            steps {
+                sh """
+                    LB_URL=\$(kubectl get svc taskflow-service \
+                        -n ${K8S_NAMESPACE} \
+                        -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+                    echo "App URL: http://\${LB_URL}"
+                    sleep 10
+                    curl -f http://\${LB_URL}/health || exit 1
+                    echo "Smoke test passed!"
+                """
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Pipeline SUCCESS — build ${IMAGE_TAG} deployed"
+        }
+        failure {
+            echo "Pipeline FAILED — rolling back"
+            sh """
+                aws eks update-kubeconfig \
+                    --name ${EKS_CLUSTER} \
+                    --region ${AWS_REGION} || true
+                kubectl rollout undo deployment/taskflow \
+                    -n ${K8S_NAMESPACE} || true
+            """
+        }
+        always {
+            sh 'docker rmi taskflow:${IMAGE_TAG} || true'
+            cleanWs()
+        }
+    }
+}
