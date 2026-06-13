@@ -12,7 +12,7 @@ pipeline {
 
     tools{
         nodejs 'node26'
-        docker 'docker-cli'
+        dockerTool 'docker-cli'
     }
 
     options {
