@@ -43,31 +43,33 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                sh """
-                    docker build \
-                        --target runner \
-                        -t taskflow:${IMAGE_TAG} \
-                        -t taskflow:latest \
-                        .
-                """
+                script {
+                    // This command uses the shell to build, assuming docker is installed on the host or mapped via socket
+                    sh """
+                        docker build \
+                            --target runner \
+                            -t taskflow:${IMAGE_TAG} \
+                            -t taskflow:latest \
+                            .
+                    """
+                }
             }
         }
 
         stage('Push to ECR') {
             steps {
-                sh """
-                    aws ecr get-login-password \
-                        --region ${AWS_REGION} | \
-                    docker login \
-                        --username AWS \
-                        --password-stdin ${ECR_REPO}
-                """
-                sh """
-                    docker tag taskflow:${IMAGE_TAG} ${ECR_REPO}:${IMAGE_TAG}
-                    docker tag taskflow:${IMAGE_TAG} ${ECR_REPO}:latest
-                    docker push ${ECR_REPO}:${IMAGE_TAG}
-                    docker push ${ECR_REPO}:latest
-                """
+                script {
+                    // Using a single sh block for better reliability
+                    sh """
+                        aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+                        
+                        docker tag taskflow:${IMAGE_TAG} ${ECR_REPO}:${IMAGE_TAG}
+                        docker tag taskflow:latest ${ECR_REPO}:latest
+                        
+                        docker push ${ECR_REPO}:${IMAGE_TAG}
+                        docker push ${ECR_REPO}:latest
+                    """
+                }
             }
         }
 
