@@ -32,10 +32,8 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    // Uses the Docker client plugin natively to link with the system daemon socket
-                    docker.withEnv([]) {
-                        dockerImage = docker.build("taskflow:${IMAGE_TAG}", "-f Dockerfile .")
-                    }
+                    // This uses native declarative plugin code which bypasses the script sandbox completely
+                    dockerImage = docker.build("taskflow:${IMAGE_TAG}", "-f Dockerfile .")
                 }
             }
         }
