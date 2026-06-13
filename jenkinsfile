@@ -14,10 +14,6 @@ pipeline {
         nodejs 'node26'
     }
 
-    options{
-        timeout(time:30, unit 'MINUTES')
-    }
-
     options {
         timeout(time: 30, unit: 'MINUTES')
         disableConcurrentBuilds()
