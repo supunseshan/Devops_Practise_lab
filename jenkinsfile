@@ -68,9 +68,6 @@ pipeline {
         }
 
         stage('Ansible Configure') {
-            when {
-                branch 'main'
-            }
             steps {
                 sh """
                     ansible-playbook \
@@ -83,9 +80,6 @@ pipeline {
         }
 
         stage('Deploy to EKS') {
-            when {
-                branch 'main'
-            }
             steps {
                 sh """
                     aws eks update-kubeconfig \
