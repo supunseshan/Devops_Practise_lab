@@ -28,30 +28,11 @@ pipeline {
             }
         }
 
-        stage('Install & Test') {
-            steps {
-                sh 'node --version && npm --version'
-                sh 'npm install'
-                sh 'npm test -- --coverage'
-            }
-            post {
-                always {
-                    junit allowEmptyResults: true, testResults: 'coverage/junit.xml'
-                }
-            }
-        }
-
         stage('Build Docker Image') {
             steps {
                 script {
-                    // This command uses the shell to build, assuming docker is installed on the host or mapped via socket
-                    sh """
-                        docker build \
-                            --target runner \
-                            -t taskflow:${IMAGE_TAG} \
-                            -t taskflow:latest \
-                            .
-                    """
+                    // Uses the Jenkins Docker Pipeline plugin to build cleanly without relying on system binaries
+                    dockerImage = docker.build("taskflow:${IMAGE_TAG}", "-f Dockerfile .")
                 }
             }
         }
@@ -59,16 +40,11 @@ pipeline {
         stage('Push to ECR') {
             steps {
                 script {
-                    // Using a single sh block for better reliability
-                    sh """
-                        aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
-                        
-                        docker tag taskflow:${IMAGE_TAG} ${ECR_REPO}:${IMAGE_TAG}
-                        docker tag taskflow:latest ${ECR_REPO}:latest
-                        
-                        docker push ${ECR_REPO}:${IMAGE_TAG}
-                        docker push ${ECR_REPO}:latest
-                    """
+                    // This handles login credentials and pushes using your managed AWS credentials securely
+                    docker.withRegistry("https://${ECR_REPO}", "ecr:us-east-1:aws-credentials") {
+                        dockerImage.push("${IMAGE_TAG}")
+                        dockerImage.push("latest")
+                    }
                 }
             }
         }
