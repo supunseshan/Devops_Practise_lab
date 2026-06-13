@@ -32,8 +32,10 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    // Uses the Jenkins Docker Pipeline plugin to build cleanly without relying on system binaries
-                    dockerImage = docker.build("taskflow:${IMAGE_TAG}", "-f Dockerfile .")
+                    // Uses the Docker client plugin natively to link with the system daemon socket
+                    docker.withEnv([]) {
+                        dockerImage = docker.build("taskflow:${IMAGE_TAG}", "-f Dockerfile .")
+                    }
                 }
             }
         }
