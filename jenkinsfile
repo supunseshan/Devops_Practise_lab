@@ -41,14 +41,19 @@ pipeline {
         }
 
         stage('Ansible Configure') {
-            when { branch 'main' }
+            // REMOVED 'when' block to force execution
             steps {
-                echo "Skipping Ansible on staging branch. Ready for main merge."
+                sh """
+                    ansible-playbook \
+                        -i ansible/inventory/aws_ec2.yml \
+                        ansible/playbooks/configure.yml \
+                        --extra-vars "app_version=${IMAGE_TAG}" \
+                        -v
+                """
             }
         }
 
         stage('Deploy to EKS') {
-            when { branch 'main' }
             steps {
                 echo "Skipping deployment on staging branch. Ready for main merge."
             }
