@@ -10,6 +10,14 @@ pipeline {
         K8S_NAMESPACE   = 'taskflow'
     }
 
+    tools{
+        nodejs 'node26'
+    }
+
+    options{
+        timeout(time:30, unit 'MINUTES')
+    }
+
     options {
         timeout(time: 30, unit: 'MINUTES')
         disableConcurrentBuilds()
@@ -128,19 +136,15 @@ pipeline {
             echo "Pipeline SUCCESS — build ${IMAGE_TAG} deployed"
         }
         failure {
-            node {
-                echo "Pipeline FAILED — rolling back"
-                sh """
-                    aws eks update-kubeconfig --name ${EKS_CLUSTER} --region ${AWS_REGION} || true
-                    kubectl rollout undo deployment/taskflow -n ${K8S_NAMESPACE} || true
-                """
-            }
+            echo "Pipeline FAILED — rolling back"
+            sh """
+                aws eks update-kubeconfig --name ${EKS_CLUSTER} --region ${AWS_REGION} || true
+                kubectl rollout undo deployment/taskflow -n ${K8S_NAMESPACE} || true
+            """
         }
         always {
-            node {
-                sh 'docker rmi taskflow:${IMAGE_TAG} || true'
-                cleanWs()
-            }
+            sh "docker rmi taskflow:${IMAGE_TAG} || true"
+            cleanWs()
         }
     }
-    }
+}
