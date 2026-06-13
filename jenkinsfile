@@ -128,18 +128,19 @@ pipeline {
             echo "Pipeline SUCCESS — build ${IMAGE_TAG} deployed"
         }
         failure {
-            echo "Pipeline FAILED — rolling back"
-            sh """
-                aws eks update-kubeconfig \
-                    --name ${EKS_CLUSTER} \
-                    --region ${AWS_REGION} || true
-                kubectl rollout undo deployment/taskflow \
-                    -n ${K8S_NAMESPACE} || true
-            """
+            node {
+                echo "Pipeline FAILED — rolling back"
+                sh """
+                    aws eks update-kubeconfig --name ${EKS_CLUSTER} --region ${AWS_REGION} || true
+                    kubectl rollout undo deployment/taskflow -n ${K8S_NAMESPACE} || true
+                """
+            }
         }
         always {
-            sh 'docker rmi taskflow:${IMAGE_TAG} || true'
-            cleanWs()
+            node {
+                sh 'docker rmi taskflow:${IMAGE_TAG} || true'
+                cleanWs()
+            }
         }
     }
-}
+    }
