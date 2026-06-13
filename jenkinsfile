@@ -41,8 +41,15 @@ pipeline {
         }
 
         stage('Ansible Configure') {
+            // REMOVED 'when' block to force execution
             steps {
-                echo "Skipping Ansible on staging branch. Ready for main merge."
+                sh """
+                    ansible-playbook \
+                        -i ansible/inventory/aws_ec2.yml \
+                        ansible/playbooks/configure.yml \
+                        --extra-vars "app_version=${IMAGE_TAG}" \
+                        -v
+                """
             }
         }
 
